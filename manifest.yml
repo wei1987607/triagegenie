@@ -1,0 +1,142 @@
+# TriageGenie — Forge app + Rovo agent that triages Jira issues.
+#
+# What it does
+#   * jira:issuePanel — "TriageGenie" panel on any Jira issue: category, priority
+#     score, suggested labels, suggested assignee, draft first response, fix plan.
+#   * trigger (avi:jira:created:issue) — auto-triages every new issue the moment
+#     it is created: applies labels + priority, suggests/sets assignee, posts the
+#     draft first response as a comment.
+#   * rovo:agent — chat with TriageGenie in Rovo ("Triage this issue",
+#     "Who should fix this?", "Find similar past issues").
+#   * rovo:mcp — the same four actions exposed as MCP tools for Rovo Studio
+#     custom agents and MCP-compatible clients.
+#
+# Teamwork Graph (Preview since 2026-10-15): the actions read linked context
+# through curated GraphQL queries (src/twg.ts) — linked docs, similar issues,
+# recent commenters, goals. Per-object scopes (read:graph:issue:jira, ...);
+# raw Cypher is refused for apps and the broad read:graph:jira scope is retired.
+#
+# TODO (needs the Atlassian account — see BUILD-LOG.md):
+#   app.id below is a placeholder. Run `forge register` once the free Atlassian
+#   Cloud developer site exists; it writes the real app id here.
+
+modules:
+  jira:issuePanel:
+    - key: triagegenie-panel
+      resource: main
+      resolver:
+        function: resolver
+      render: native
+      title: TriageGenie
+  trigger:
+    - key: triagegenie-auto-triage
+      function: auto-triage
+      events:
+        - avi:jira:created:issue
+  rovo:agent:
+    - key: triagegenie-agent
+      name: TriageGenie
+      description: Triages Jira work items — classifies, prioritises, suggests an assignee and drafts a first response, using Teamwork Graph context.
+      prompt: resource:agent-prompt;prompt.md
+      conversationStarters:
+        - Triage this issue
+        - Who should fix this issue?
+        - Find similar past issues
+      actions:
+        - triage-issue
+        - similar-issues
+        - suggest-assignee
+        - draft-response
+  action:
+    - key: triage-issue
+      name: Triage a Jira issue
+      function: triage-action
+      actionVerb: GET
+      description: |
+        Analyse one Jira work item and return its triage: category, priority score (0-100), suggested labels, suggested assignee, a draft first response and a fix plan. Reads Teamwork Graph context (similar issues, recent commenters, linked goals) so the answer is grounded, never guessed.
+      inputs:
+        issueKey:
+          title: Work item key
+          type: string
+          required: false
+          description: The Jira work item key, for example PROJ-123. Leave empty to use the work item open on screen.
+    - key: similar-issues
+      name: Find similar past issues
+      function: similar-action
+      actionVerb: GET
+      description: |
+        Find past Jira work items similar to the given one, ranked by text similarity, with their status and resolution. Use it to check whether a bug was already fixed or a request was already answered.
+      inputs:
+        issueKey:
+          title: Work item key
+          type: string
+          required: false
+          description: The Jira work item key, for example PROJ-123. Leave empty to use the work item open on screen.
+    - key: suggest-assignee
+      name: Suggest an assignee
+      function: assignee-action
+      actionVerb: GET
+      description: |
+        Suggest the best team member to own a Jira work item, based on skill match with the issue text and components, current workload, and on-call status. Never suggests someone already at capacity.
+      inputs:
+        issueKey:
+          title: Work item key
+          type: string
+          required: false
+          description: The Jira work item key, for example PROJ-123. Leave empty to use the work item open on screen.
+    - key: draft-response
+      name: Draft a first response
+      function: draft-action
+      actionVerb: GET
+      description: |
+        Draft a first response to the reporter of a Jira work item: what we understood, the triage outcome (category and priority), similar past issues if any, and the next step. The draft is text only — it is not posted until a human applies it.
+      inputs:
+        issueKey:
+          title: Work item key
+          type: string
+          required: false
+          description: The Jira work item key, for example PROJ-123. Leave empty to use the work item open on screen.
+  rovo:mcp:
+    - key: triagegenie-mcp
+      name: TriageGenie MCP
+      tools:
+        - triage-issue
+        - similar-issues
+        - suggest-assignee
+        - draft-response
+  function:
+    - key: resolver
+      handler: index.resolver
+    - key: auto-triage
+      handler: index.autoTriage
+    - key: triage-action
+      handler: index.triageIssueAction
+    - key: similar-action
+      handler: index.similarIssuesAction
+    - key: assignee-action
+      handler: index.suggestAssigneeAction
+    - key: draft-action
+      handler: index.draftResponseAction
+resources:
+  - key: main
+    path: src/frontend/index.tsx
+  - key: agent-prompt
+    path: prompts
+permissions:
+  scopes:
+    - read:jira-work
+    - write:jira-work
+    - read:jira-user
+    - read:comment:jira
+    - write:comment:jira
+    - storage:app
+    - read:graph:issue:jira
+    - read:graph:issue-status:jira
+    - read:graph:issue-comment:jira
+    - read:graph:user:atlassian
+    - read:graph:team:atlassian
+    - read:graph:goal:atlassian
+app:
+  runtime:
+    name: nodejs24.x
+  id: ari:cloud:ecosystem::app/00000000-0000-0000-0000-000000000000
