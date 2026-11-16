@@ -179,3 +179,33 @@
 ## Judges' install link (obtained 2026-11-16 17:19, "Sharing with anyone", Jira only)
 
 https://developer.atlassian.com/console/install/822e6b7d-3afe-401b-a26a-2ed420fef57d?signature=AYABeFp2w1i8742Dg16oqcjli4oAAAADAAdhd3Mta21zAEthcm46YXdzOmttczp1cy13ZXN0LTI6NzA5NTg3ODM1MjQzOmtleS83MDVlZDY3MC1mNTdjLTQxYjUtOWY5Yi1lM2YyZGNjMTQ2ZTcAuAECAQB4CxqLTo9l4lqXuFjNim1xJM%2Bp%2F3TVP9xHS2BrU5DRRucBIH4RMori4nvs08M1H7SrwgAAAH4wfAYJKoZIhvcNAQcGoG8wbQIBADBoBgkqhkiG9w0BBwEwHgYJYIZIAWUDBAEuMBEEDFX%2BDkZXzUpLdLDLtgIBEIA713KxxAbFuwkC%2FKDO8c2s28iWuhpn17IT0wlWYyU4cF2%2Bkx%2Bp5V1%2BKfMN%2F02uGwarBBnNtwNywIUYkAsAB2F3cy1rbXMAS2Fybjphd3M6a21zOmV1LXdlc3QtMTo3MDk1ODc4MzUyNDM6a2V5LzQ2MzBjZTZiLTAwYzMtNGRlMi04NzdiLTYyN2UyMDYwZTVjYwC4AQICAHi9bVMAkme4qVQX1fQHo6ePw3H40A7cGfz7yrmSfBWMXgFor7BWxXNFL262ypxeG%2BCFAAAAfjB8BgkqhkiG9w0BBwagbzBtAgEAMGgGCSqGSIb3DQEHATAeBglghkgBZQMEAS4wEQQMIaJBEQIzTNLzFblRAgEQgDtF8IBUPq2iqKYae7KmOSXVuq3uMxvOnsJ1rM8PYK8M4MoH1Gs7BLxGKQb27xLQ%2BkQ%2FWADOX10iqk0YxwAHYXdzLWttcwBLYXJuOmF3czprbXM6dXMtZWFzdC0xOjcwOTU4NzgzNTI0MzprZXkvNmMxMjBiYTAtNGNkNS00OTg1LWI4MmUtNDBhMDQ5NTJjYzU3ALgBAgIAeDYASx0XCjkny4iLV6vz%2BKtEGSGT6kdt0QRpkn6D%2FlVEAWYUBBAKzH45dwrOQSP1Mk8AAAB%2BMHwGCSqGSIb3DQEHBqBvMG0CAQAwaAYJKoZIhvcNAQcBMB4GCWCGSAFlAwQBLjARBAwfsbx7eIFigPH0hIECARCAO0vjk72gc%2FuPt47qW9h%2Bs6g%2F8AOm28wy3mYM4uhfcjpfeFfgfE%2Brz4VV5yU3OaxX7Em4d4jiv75MLyTqAgAAAAAMAAAQAAAAAAAAAAAAAAAAAG5kALIhly0MMr5h%2Fa1BkNj%2F%2F%2F%2F%2FAAAAAQAAAAAAAAAAAAAAAQAAADI4uaixK28ISSkwr%2B3xfvQ7KCVvRdda91fR40gUqnvAhcAiZeN7VUFC%2BfTcRiA8%2ByydgMXVhTJNcp5%2BzXYCWGwG%2Ba4%3D&product=jira
+
+## Submission progress (2026-11-16, subagent run)
+- **Devpost draft:** DEVPOST-DRAFT.md (title, tagline, full description,
+  testing instructions, checklist). Category: Apps for Software Teams.
+  Bonus: Rovo / MCP / Teamwork Graph. Deadline Dec 23, 2026 04:00 Beijing.
+- **YouTube upload pack:** YOUTUBE-UPLOAD.md (title, description, tags).
+  NOTE: Codegeist rules require the demo video to be PUBLIC on YouTube
+  ("Videos must be uploaded to YouTube and made public") — the earlier
+  Unlisted plan conflicts; publish as Public.
+- **Cover image:** demo-video/cover.png (1920x1080 title card, verified
+  legible) — fallback only; prefer a real panel screenshot once available.
+- **README updated:** live-verification status, install link, demo video /
+  Devpost placeholders; stale "not run against live data" claims fixed.
+- **Commit 5c8b155 pushed** (DEVPOST-DRAFT, YOUTUBE-UPLOAD, cover, README,
+  DEMO-SCRIPT).
+- **BLOCKED — real screenshots:** the video must show the REAL app. VM
+  headless Chromium cannot reach the internet (ERR_TUNNEL_CONNECTION_FAILED
+  via proxy, SSL error direct — re-verified 2026-11-16 three ways) and no
+  Jira API token exists on the VM (Forge CLI config holds no token), so no
+  screenshot route exists from the VM. Needed from a browser task (cloud
+  browser, logged in as bnb69228): create a FRESH test issue in CPG (not
+  CPG-7/8/9), wait ~1 min, then capture (PNG screenshots preferred; Chrome
+  Print -> Save as PDF as fallback — files land in
+  ~/workspace/browser_downloads/): (a) issue view with labels + the one bot
+  comment, (b) TriageGenie panel open, (c) Apply clicked + green
+  confirmation, (d) CPG board view. Then the video can be built (ffmpeg
+  screenshot-cut, <5 min, 1920x1080, English captions, no voiceover).
+- **Still needs a browser:** YouTube upload (device browser, her computer
+  Chrome, Temple of Merit, Public) and Devpost submit (GitHub OAuth as
+  wei1987607 — the saved Devpost password does not work).
