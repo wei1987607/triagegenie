@@ -209,3 +209,26 @@ https://developer.atlassian.com/console/install/822e6b7d-3afe-401b-a26a-2ed420fe
 - **Still needs a browser:** YouTube upload (device browser, her computer
   Chrome, Temple of Merit, Public) and Devpost submit (GitHub OAuth as
   wei1987607 — the saved Devpost password does not work).
+
+## Demo video — DONE 2026-11-16 ~17:32 (screenshot-cut, real app footage only)
+
+- File: demo-video/triagegenie-demo.mp4 — 108s (1:48), 1920x1080, 30fps,
+  H.264 + silent AAC, 2,090,326 bytes. Build: demo-video/build.sh (ffmpeg).
+- Sources: 4 print-to-PDF captures of the live site (CPG-10 issue, panel,
+  Apply confirmation, CPG board), rendered at 200dpi and panned vertically
+  through each page; title/end cards reuse demo-video/cover.png. English
+  captions burned in, NO voiceover. No AI-generated UI anywhere.
+- Shots (per DEMO-SCRIPT.md): 1 title 6s; 2 board/problem 16s; 3 auto-triage
+  24s (labels + bot comment); 4 panel 30s (Low, task 35/100, 70% confidence,
+  labels, assignee note, draft, fix plan, Why, Apply button); 5 Apply 24s
+  (green "Triage applied" + "skipped duplicate comment"); 6 end card 8s
+  (repo URL + "Free — install on any Jira site").
+- Frame verification: extracted frames at 3/12/20/30/42/55/70/82/95/104s and
+  read them visually — every caption legible, every app screenshot
+  recognisable (labels, panel, Apply confirmation), no black/blank segments.
+  One cosmetic note: the right "详细信息" sidebar is slightly clipped in the
+  print captures (labels show "triage…" cut off) — that is the real print
+  layout, not an edit.
+- Next: YouTube upload (Public, Temple of Merit) + Devpost submit by
+  Dec 23 04:00 Beijing. Install link is in the "Judges' install link" section
+  above — do NOT paste it in chat (user: keep it for submission).
