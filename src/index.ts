@@ -14,6 +14,7 @@ import {
   buildSimilarJql,
   findSimilar,
   inferSkills,
+  isDuplicateFirstResponse,
   toAdf,
   triageIssue,
 } from './triage';
@@ -245,6 +246,22 @@ interface ApplyOutcome {
   notes: string[];
 }
 
+// Fetch the issue's existing comments and check whether the first
+// response is already there. Returns null when the comments could not
+// be read — the caller then posts anyway, because a duplicate comment
+// is a wart while a missing first response is worse.
+async function firstResponseAlreadyPosted(
+  issueKey: string,
+  draftResponse: string,
+  jira: JiraClient,
+): Promise<boolean | null> {
+  const res = await jira.requestJira(route`/rest/api/3/issue/${issueKey}/comment?maxResults=100`);
+  if (!res.ok) return null;
+  const data = (await res.json()) as { comments?: { body?: unknown }[] };
+  const texts = (data.comments ?? []).map((c) => adfToText(c.body));
+  return isDuplicateFirstResponse(texts, draftResponse, issueKey);
+}
+
 async function applyTriage(
   issueKey: string,
   result: TriageResult,
@@ -277,13 +294,28 @@ async function applyTriage(
     else notes.push(`could not assign ${result.assignee.displayName} (${assignRes.status})`);
   }
 
-  const commentRes = await jira.requestJira(route`/rest/api/3/issue/${issueKey}/comment`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ body: toAdf(result.draftResponse) }),
-  });
-  if (commentRes.ok) applied.comment = true;
-  else notes.push(`could not post first response (${commentRes.status})`);
+  // Idempotent first response: the auto-triage trigger already posts
+  // this draft as a comment when the issue is created, and Apply runs
+  // the same applyTriage — posting unconditionally gives the issue two
+  // identical first-response comments (seen live on CPG-8, 2026-11-16).
+  // Skip the post when the first response is already on the issue; the
+  // panel shows the skip in its notes line.
+  const alreadyPosted = await firstResponseAlreadyPosted(issueKey, result.draftResponse, jira);
+  if (alreadyPosted) {
+    applied.comment = true;
+    notes.push('first response already posted — skipped duplicate comment');
+  } else {
+    if (alreadyPosted === null) {
+      notes.push('existing comments could not be read — posting the first response anyway');
+    }
+    const commentRes = await jira.requestJira(route`/rest/api/3/issue/${issueKey}/comment`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ body: toAdf(result.draftResponse) }),
+    });
+    if (commentRes.ok) applied.comment = true;
+    else notes.push(`could not post first response (${commentRes.status})`);
+  }
 
   try {
     await kvs.set(`triage:${issueKey}`, { ...result, triagedAt: new Date().toISOString() });

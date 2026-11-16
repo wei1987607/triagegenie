@@ -8,6 +8,7 @@ import {
   buildSimilarJql,
   findSimilar,
   inferSkills,
+  isDuplicateFirstResponse,
   toAdf,
   triageIssue,
 } from '../src/triage';
@@ -150,6 +151,39 @@ console.log('[12] Helpers');
     'adfToText round-trips',
     adfToText({ version: 1, type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Hello' }] }] }).trim() === 'Hello',
   );
+}
+
+console.log('[13] Duplicate first-response detection (Apply idempotency)');
+{
+  const draft =
+    "Hi — thanks for raising this. We've triaged MOB-55 as bug (priority High, 65/100).\n\n" +
+    'What we understood: App crashes on launch\n\n' +
+    'Owner: not assigned yet — a human will pick an owner.\n\n' +
+    "We'll update this issue here as we work on it.";
+  check('no comments -> not a duplicate', !isDuplicateFirstResponse([], draft, 'MOB-55'));
+  check('identical comment -> duplicate', isDuplicateFirstResponse([draft], draft, 'MOB-55'));
+  check(
+    'same text with different whitespace -> duplicate',
+    isDuplicateFirstResponse([`  ${draft.split('\n').join('\n\n')}  `], draft, 'MOB-55'),
+  );
+  check(
+    'unrelated comment -> not a duplicate',
+    !isDuplicateFirstResponse(['Looks good, shipping it.'], draft, 'MOB-55'),
+  );
+  check(
+    'TriageGenie signature with a changed owner line -> duplicate',
+    isDuplicateFirstResponse(
+      [draft.replace('Owner: not assigned yet — a human will pick an owner.', "Owner: Sara Kim — they'll pick this up next.")],
+      draft,
+      'MOB-55',
+    ),
+  );
+  check(
+    'signature for a different issue -> not a duplicate',
+    !isDuplicateFirstResponse([draft.replaceAll('MOB-55', 'MOB-99')], draft, 'MOB-55'),
+  );
+  const real = triageIssue(byKey('MOB-55'), MOCK_TEAM).draftResponse;
+  check('real engine draft recognises its own duplicate', isDuplicateFirstResponse([real], real, 'MOB-55'));
 }
 
 console.log(`\n${passed} passed, ${failed} failed.`);

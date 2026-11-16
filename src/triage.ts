@@ -490,6 +490,33 @@ export function draftFirstResponse(
   return lines.join('\n');
 }
 
+// Duplicate first-response detection (Apply idempotency).
+//
+// The auto-triage trigger posts the draft as a comment when the issue is
+// created, and Apply runs the same applyTriage — without this check the
+// issue ends up with two identical first-response comments (seen live on
+// CPG-8, 2026-11-16). A comment counts as the first response already
+// posted when its text is identical to the draft, or when it carries the
+// TriageGenie first-response signature for this issue. The draft can
+// shift slightly between the trigger run and the panel run (e.g. the
+// assignee line, or a similar issue found in between), so the signature
+// catches those near-duplicates too.
+export function isDuplicateFirstResponse(
+  existingCommentTexts: string[],
+  draftResponse: string,
+  issueKey: string,
+): boolean {
+  const normalise = (s: string): string => s.replace(/\s+/g, ' ').trim();
+  const wanted = normalise(draftResponse);
+  const signature = `We've triaged ${issueKey} as`;
+  for (const raw of existingCommentTexts) {
+    const text = normalise(raw);
+    if (!text) continue;
+    if (text === wanted || text.includes(signature)) return true;
+  }
+  return false;
+}
+
 // Convert plain-text draft to Jira ADF (the format /rest/api/3 comment needs).
 export function toAdf(text: string): Record<string, unknown> {
   const paragraphs = text
