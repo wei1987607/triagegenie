@@ -13,7 +13,9 @@
 //     errors" as "could not read", never as "nothing there", and retry
 //     transient errors with backoff.
 //   - @forge/api exposes requestTeamworkGraph on asUser() only. asUser()
-//     answers with what the person chatting can see.
+//     answers with what the person chatting can see. In @forge/api 8.4.0
+//     typings AsAppFetchMethods has NO TeamworkGraphFetchMethods, so a
+//     trigger (no user context) must skip graph calls, not attempt them.
 //
 // This client is NOT exercised against live data yet (no Atlassian account
 // — see BUILD-LOG.md). The queries and the call shape are the verified ones;
@@ -43,8 +45,18 @@ export interface TwgResult {
 }
 
 // One GraphQL call as the user, with up to 3 retries on transient errors.
-// Answers { ok, data, error, ms } and never throws.
-export async function twg(opName: string, query: string, variables: Record<string, unknown>): Promise<TwgResult> {
+// Answers { ok, data, error, ms } and never throws. With opts.asApp the
+// graph is skipped outright (requestTeamworkGraph is asUser-only) and the
+// caller records the skip as a note instead of an error.
+export async function twg(
+  opName: string,
+  query: string,
+  variables: Record<string, unknown>,
+  opts?: { asApp?: boolean },
+): Promise<TwgResult> {
+  if (opts?.asApp) {
+    return { ok: false, data: null, error: 'teamwork-graph-as-app-unavailable', ms: 0 };
+  }
   const operationName = `${OP_PREFIX}${opName}`;
   const text = query.replace('query OP', `query ${operationName}`);
   const t0 = Date.now();
@@ -95,12 +107,13 @@ export async function twgAll(
   variables: Record<string, unknown>,
   field: string,
   maxPages = 4,
+  opts?: { asApp?: boolean },
 ): Promise<TwgPage> {
   const nodes: Record<string, unknown>[] = [];
   let after: string | null = null;
 
   for (let page = 0; page < maxPages; page++) {
-    const r = await twg(opName, query, { ...variables, first: PAGE_SIZE, after });
+    const r = await twg(opName, query, { ...variables, first: PAGE_SIZE, after }, opts);
     if (!r.ok) return { ok: nodes.length > 0, nodes, complete: false, error: r.error };
     const conn = r.data?.[field] as
       | { edges?: { node?: Record<string, unknown> }[]; pageInfo?: { hasNextPage?: boolean; endCursor?: string } }

@@ -6,7 +6,7 @@
 // decision logic is verified offline (scripts/smoke-test.ts) without an
 // Atlassian account.
 
-import api, { route } from '@forge/api';
+import api, { route, type RequestProductMethods } from '@forge/api';
 import { kvs } from '@forge/kvs';
 import Resolver from '@forge/resolver';
 import {
@@ -18,10 +18,18 @@ import {
   triageIssue,
 } from './triage';
 import type { GraphContext, IssueInput, SimilarIssue, TeamMember, TriageResult } from './triage';
-import { twgAll, Q, workItemAri } from './twg';
+import { twgAll, Q, workItemAri, type TwgPage } from './twg';
 
 const log = (event: string, data: Record<string, unknown>): void =>
   console.log(JSON.stringify({ triagegenie: event, ...data }));
+
+// Auth mode: the panel and Rovo actions run with a user on screen, so they
+// use asUser(). A trigger has no user context — asUser() fails there with
+// 401 AUTH_TYPE_UNAVAILABLE (seen live on CPG-7, 2026-11-16) — so the
+// trigger uses asApp(). Both expose requestJira; only asUser() has
+// requestTeamworkGraph (see twg.ts).
+type JiraClient = RequestProductMethods;
+const jiraClient = (asApp: boolean): JiraClient => (asApp ? api.asApp() : api.asUser());
 
 // ---------------------------------------------------------------------------
 // Jira REST shapes (minimal — only the fields we read)
@@ -54,10 +62,11 @@ interface JiraUserRest {
 // Data loading
 // ---------------------------------------------------------------------------
 
-async function loadIssue(key: string): Promise<{ issue: IssueInput; raw: JiraIssueRest } | { error: string }> {
-  const res = await api
-    .asUser()
-    .requestJira(
+async function loadIssue(
+  key: string,
+  jira: JiraClient,
+): Promise<{ issue: IssueInput; raw: JiraIssueRest } | { error: string }> {
+  const res = await jira.requestJira(
       route`/rest/api/3/issue/${key}?fields=summary,description,issuetype,labels,components,reporter,assignee,status,project`,
     );
   if (res.status === 404) return { error: `${key} does not exist or you cannot see it.` };
@@ -82,12 +91,11 @@ async function loadIssue(key: string): Promise<{ issue: IssueInput; raw: JiraIss
 async function similarIssuesLive(
   issue: IssueInput,
   projectKey: string,
+  jira: JiraClient,
 ): Promise<{ similar: SimilarIssue[]; notes: string[] }> {
   const notes: string[] = [];
   const jql = buildSimilarJql(issue, projectKey);
-  const res = await api
-    .asUser()
-    .requestJira(route`/rest/api/3/search/jql?jql=${jql}&fields=summary,status,resolution&maxResults=10`);
+  const res = await jira.requestJira(route`/rest/api/3/search/jql?jql=${jql}&fields=summary,status,resolution&maxResults=10`);
   if (!res.ok) {
     notes.push(`similar-issue search could not be read (${res.status})`);
     return { similar: [], notes };
@@ -114,15 +122,26 @@ async function graphContextLive(
   raw: JiraIssueRest,
   cloudId: string | undefined,
   similar: SimilarIssue[],
+  jira: JiraClient,
+  asApp: boolean,
 ): Promise<GraphContext> {
   const notes: string[] = [];
   const ari = workItemAri(cloudId, raw.id);
-  const [comments, goals] = await Promise.all([
-    twgAll('workItemComments', Q.workItemComments, { id: ari, since: 'P90D' }, 'jiraWorkItemComments'),
-    twgAll('workItemGoals', Q.workItemGoals, { id: ari }, 'jiraWorkItemGoals'),
-  ]);
-  if (!comments.ok) notes.push(`comments could not be read: ${comments.error}`);
-  if (!goals.ok) notes.push(`goals could not be read: ${goals.error}`);
+  // Teamwork Graph is asUser-only: a trigger has no user context, so in
+  // app-auth mode the graph is skipped and the triage is based on the
+  // issue text + JQL similarity only.
+  let comments: TwgPage = { ok: false, nodes: [], complete: false, error: null };
+  let goals: TwgPage = { ok: false, nodes: [], complete: false, error: null };
+  if (asApp) {
+    notes.push('Teamwork Graph context skipped in auto-triage (no user context)');
+  } else {
+    [comments, goals] = await Promise.all([
+      twgAll('workItemComments', Q.workItemComments, { id: ari, since: 'P90D' }, 'jiraWorkItemComments'),
+      twgAll('workItemGoals', Q.workItemGoals, { id: ari }, 'jiraWorkItemGoals'),
+    ]);
+    if (!comments.ok) notes.push(`comments could not be read: ${comments.error}`);
+    if (!goals.ok) notes.push(`goals could not be read: ${goals.error}`);
+  }
 
   const byAuthor = new Map<string, { name: string; comments: number; lastAt: string | null }>();
   for (const c of comments.nodes) {
@@ -136,7 +155,7 @@ async function graphContextLive(
 
   const linkedDocs: GraphContext['linkedDocs'] = [];
   try {
-    const res = await api.asUser().requestJira(route`/rest/api/3/issue/${raw.key}/remotelink`);
+    const res = await jira.requestJira(route`/rest/api/3/issue/${raw.key}/remotelink`);
     if (res.ok) {
       const links = (await res.json()) as { object?: { url?: string; title?: string } }[];
       for (const l of links) {
@@ -168,10 +187,8 @@ async function graphContextLive(
 const MAX_TEAM_CANDIDATES = 10;
 const DEFAULT_MAX_LOAD = 5;
 
-async function liveTeam(issue: IssueInput, projectKey: string): Promise<TeamMember[]> {
-  const res = await api
-    .asUser()
-    .requestJira(route`/rest/api/3/user/assignable/search?project=${projectKey}&maxResults=${MAX_TEAM_CANDIDATES}`);
+async function liveTeam(issue: IssueInput, projectKey: string, jira: JiraClient): Promise<TeamMember[]> {
+  const res = await jira.requestJira(route`/rest/api/3/user/assignable/search?project=${projectKey}&maxResults=${MAX_TEAM_CANDIDATES}`);
   if (!res.ok) return [];
   const users = (await res.json()) as JiraUserRest[];
   const active = users
@@ -204,15 +221,17 @@ async function liveTeam(issue: IssueInput, projectKey: string): Promise<TeamMemb
 async function runTriage(
   issueKey: string,
   cloudId?: string,
+  asApp = false,
 ): Promise<{ result: TriageResult; raw: JiraIssueRest } | { error: string }> {
-  const loaded = await loadIssue(issueKey);
+  const jira = jiraClient(asApp);
+  const loaded = await loadIssue(issueKey, jira);
   if ('error' in loaded) return loaded;
   const { issue, raw } = loaded;
   const projectKey = raw.fields.project?.key ?? issueKey.split('-')[0];
-  const { similar, notes: simNotes } = await similarIssuesLive(issue, projectKey);
-  const context = await graphContextLive(raw, cloudId, similar);
+  const { similar, notes: simNotes } = await similarIssuesLive(issue, projectKey, jira);
+  const context = await graphContextLive(raw, cloudId, similar, jira, asApp);
   context.notes.push(...simNotes);
-  const team = await liveTeam(issue, projectKey);
+  const team = await liveTeam(issue, projectKey, jira);
   const result = triageIssue(issue, team, context);
   return { result, raw };
 }
@@ -226,12 +245,17 @@ interface ApplyOutcome {
   notes: string[];
 }
 
-async function applyTriage(issueKey: string, result: TriageResult, raw: JiraIssueRest): Promise<ApplyOutcome> {
+async function applyTriage(
+  issueKey: string,
+  result: TriageResult,
+  raw: JiraIssueRest,
+  jira: JiraClient,
+): Promise<ApplyOutcome> {
   const notes: string[] = [];
   const applied: ApplyOutcome['applied'] = { labels: false, priority: false, assignee: false, comment: false };
 
   const newLabels = [...new Set([...(raw.fields.labels ?? []), ...result.labels])];
-  const updateRes = await api.asUser().requestJira(route`/rest/api/3/issue/${issueKey}`, {
+  const updateRes = await jira.requestJira(route`/rest/api/3/issue/${issueKey}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ fields: { labels: newLabels, priority: { name: result.priorityLabel } } }),
@@ -244,7 +268,7 @@ async function applyTriage(issueKey: string, result: TriageResult, raw: JiraIssu
   }
 
   if (result.assignee) {
-    const assignRes = await api.asUser().requestJira(route`/rest/api/3/issue/${issueKey}/assignee`, {
+    const assignRes = await jira.requestJira(route`/rest/api/3/issue/${issueKey}/assignee`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ accountId: result.assignee.accountId }),
@@ -253,7 +277,7 @@ async function applyTriage(issueKey: string, result: TriageResult, raw: JiraIssu
     else notes.push(`could not assign ${result.assignee.displayName} (${assignRes.status})`);
   }
 
-  const commentRes = await api.asUser().requestJira(route`/rest/api/3/issue/${issueKey}/comment`, {
+  const commentRes = await jira.requestJira(route`/rest/api/3/issue/${issueKey}/comment`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ body: toAdf(result.draftResponse) }),
@@ -304,7 +328,7 @@ triageResolver.define('applyTriage', async (req) => {
   if (!key) return { error: 'No work item key. Open a Jira issue and try again.' };
   const out = await runTriage(key, cloudIdFromContext(req.context));
   if ('error' in out) return { error: out.error };
-  const applied = await applyTriage(key, out.result, out.raw);
+  const applied = await applyTriage(key, out.result, out.raw, api.asUser());
   return { applied: applied.applied, notes: applied.notes, triage: out.result };
 });
 
@@ -324,12 +348,14 @@ export async function autoTriage(
     return;
   }
   try {
-    const out = await runTriage(key, context?.cloudId);
+    // Trigger context has no user: run everything as the app (asUser()
+    // fails here with 401 AUTH_TYPE_UNAVAILABLE — seen live on CPG-7).
+    const out = await runTriage(key, context?.cloudId, true);
     if ('error' in out) {
       log('auto-triage-error', { key, error: out.error });
       return;
     }
-    const applied = await applyTriage(key, out.result, out.raw);
+    const applied = await applyTriage(key, out.result, out.raw, api.asApp());
     log('auto-triage', {
       key,
       category: out.result.category,
@@ -370,10 +396,10 @@ export async function triageIssueAction(payload: unknown): Promise<Record<string
 export async function similarIssuesAction(payload: unknown): Promise<Record<string, unknown>> {
   const key = actionIssueKey(payload);
   if (!key) return { error: 'Which work item? Give me a key such as PROJ-123.' };
-  const loaded = await loadIssue(key);
+  const loaded = await loadIssue(key, api.asUser());
   if ('error' in loaded) return { error: loaded.error };
   const projectKey = loaded.raw.fields.project?.key ?? key.split('-')[0];
-  const { similar, notes } = await similarIssuesLive(loaded.issue, projectKey);
+  const { similar, notes } = await similarIssuesLive(loaded.issue, projectKey, api.asUser());
   return { issueKey: key, similar, notes };
 }
 

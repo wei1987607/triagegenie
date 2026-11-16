@@ -14,6 +14,7 @@ import ForgeReconciler, {
   Lozenge,
   SectionMessage,
   Stack,
+  Strong,
   Text,
   useProductContext,
 } from '@forge/react';
@@ -130,13 +131,13 @@ const App = () => {
 
           <Box>
             <Text>
-              <strong>Suggested labels:</strong> {triage.labels.join(', ')}
+              <Strong>Suggested labels:</Strong> {triage.labels.join(', ')}
             </Text>
           </Box>
 
           <Box>
             <Text>
-              <strong>Suggested assignee:</strong>{' '}
+              <Strong>Suggested assignee:</Strong>{' '}
               {triage.assignee ? `${triage.assignee.displayName} — ${triage.assignee.reason}` : triage.assigneeNote}
             </Text>
           </Box>
@@ -144,7 +145,7 @@ const App = () => {
           {triage.similarIssues.length > 0 && (
             <Box>
               <Text>
-                <strong>Similar past issues:</strong>{' '}
+                <Strong>Similar past issues:</Strong>{' '}
                 {triage.similarIssues.map((s) => `${s.key} (${s.status})`).join(', ')}
               </Text>
             </Box>
@@ -152,14 +153,14 @@ const App = () => {
 
           <Box>
             <Text>
-              <strong>Draft first response:</strong>
+              <Strong>Draft first response:</Strong>
             </Text>
             <Text>{triage.draftResponse}</Text>
           </Box>
 
           <Box>
             <Text>
-              <strong>Fix plan:</strong>
+              <Strong>Fix plan:</Strong>
             </Text>
             {triage.fixPlan.map((step, i) => (
               <Text key={i}>
@@ -170,7 +171,7 @@ const App = () => {
 
           <Box>
             <Text>
-              <strong>Why:</strong> {triage.reasons.join('; ')}
+              <Strong>Why:</Strong> {triage.reasons.join('; ')}
             </Text>
           </Box>
 
