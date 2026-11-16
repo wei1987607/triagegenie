@@ -28,6 +28,7 @@ modules:
         function: resolver
       render: native
       title: TriageGenie
+      icon: https://developer.atlassian.com/platform/forge/images/icons/issue-panel-icon.svg
   trigger:
     - key: triagegenie-auto-triage
       function: auto-triage
@@ -36,7 +37,8 @@ modules:
   rovo:agent:
     - key: triagegenie-agent
       name: TriageGenie
-      description: Triages Jira work items — classifies, prioritises, suggests an assignee and drafts a first response, using Teamwork Graph context.
+      description: Triages Jira work items — classifies, prioritises, suggests an
+        assignee and drafts a first response, using Teamwork Graph context.
       prompt: resource:agent-prompt;prompt.md
       conversationStarters:
         - Triage this issue
@@ -53,13 +55,14 @@ modules:
       function: triage-action
       actionVerb: GET
       description: |
-        Analyse one Jira work item and return its triage: category, priority score (0-100), suggested labels, suggested assignee, a draft first response and a fix plan. Reads Teamwork Graph context (similar issues, recent commenters, linked goals) so the answer is grounded, never guessed.
+        Analyse one Jira work item and return its triage: category, priority score (0-100), suggested labels, suggested assignee, a draft first response and a fix plan. Uses Teamwork Graph context so the answer is grounded, never guessed.
       inputs:
         issueKey:
           title: Work item key
           type: string
           required: false
-          description: The Jira work item key, for example PROJ-123. Leave empty to use the work item open on screen.
+          description: The Jira work item key, for example PROJ-123. Leave empty to use
+            the work item open on screen.
     - key: similar-issues
       name: Find similar past issues
       function: similar-action
@@ -71,7 +74,8 @@ modules:
           title: Work item key
           type: string
           required: false
-          description: The Jira work item key, for example PROJ-123. Leave empty to use the work item open on screen.
+          description: The Jira work item key, for example PROJ-123. Leave empty to use
+            the work item open on screen.
     - key: suggest-assignee
       name: Suggest an assignee
       function: assignee-action
@@ -83,7 +87,8 @@ modules:
           title: Work item key
           type: string
           required: false
-          description: The Jira work item key, for example PROJ-123. Leave empty to use the work item open on screen.
+          description: The Jira work item key, for example PROJ-123. Leave empty to use
+            the work item open on screen.
     - key: draft-response
       name: Draft a first response
       function: draft-action
@@ -95,7 +100,8 @@ modules:
           title: Work item key
           type: string
           required: false
-          description: The Jira work item key, for example PROJ-123. Leave empty to use the work item open on screen.
+          description: The Jira work item key, for example PROJ-123. Leave empty to use
+            the work item open on screen.
   rovo:mcp:
     - key: triagegenie-mcp
       name: TriageGenie MCP
@@ -139,4 +145,4 @@ permissions:
 app:
   runtime:
     name: nodejs24.x
-  id: ari:cloud:ecosystem::app/00000000-0000-0000-0000-000000000000
+  id: ari:cloud:ecosystem::app/822e6b7d-3afe-401b-a26a-2ed420fef57d
