@@ -8,6 +8,17 @@ A Forge app + Rovo agent that triages Jira issues — built for
 Best apps with Teamwork Graph integration. (One entry can win one grand prize
 and one bonus prize.)
 
+**Status (2026-11-16): production v2.2.0, deployed and installed on
+https://weirongcheng9.atlassian.net, verified live end to end** — a fresh
+issue is auto-triaged in ~11 seconds (labels + one bot first-response
+comment), the panel renders with the full score breakdown, and Apply lands
+the changes without ever double-posting. See DEPLOY-STATUS.md.
+**Judges' install link:** in DEPLOY-STATUS.md ("Judges' install link"
+section) — Sharing with anyone, Jira only.
+**Demo video:** (YouTube link — fill in after upload; must be Public per
+Codegeist rules, under 5 minutes.) **Devpost:** submit by Dec 23, 2026
+04:00 Beijing — draft in DEVPOST-DRAFT.md.
+
 ## What it does
 
 A new Jira issue arrives. TriageGenie:
@@ -91,57 +102,54 @@ npm install           # note: keytar needs libsecret — see BUILD-LOG.md
 npm run typecheck     # tsc --noEmit, strict
 npm test              # smoke test: 77 assertions, mock data only
 npm run validate-manifest
-npm run verify        # all three
+npm run verify        # all three (typecheck + smoke + manifest)
 ```
 
-`npm run lint` (`forge lint`) **cannot run yet**: Forge CLI 15 requires a
-login before any command, and the Atlassian developer account does not exist
-yet (see BUILD-LOG.md for the full story and the offline validator that
-replaces it for now).
+`forge lint` runs with `FORGE_EMAIL` + `FORGE_API_TOKEN` env vars —
+`forge login` does not work on this VM (no keychain); see DEPLOY-STATUS.md.
 
-## Setup once the Atlassian account exists
+## Setup
 
-1. Create the free Atlassian Cloud developer site, then:
-   ```bash
-   forge register     # writes the real app id into manifest.yml
-   forge deploy -e production
-   forge install      # an org admin installs it and approves the graph scopes
-   ```
-2. **Rovo caveat:** Rovo is paid-only — a free site may not have it. A
-   Standard or Premium trial includes Rovo. Installing an app with Teamwork
-   Graph scopes needs an organization admin.
-3. For the judges' installation link: deploy to production, then in the
+The Atlassian account, developer site, app registration, deploy and install
+are all done — see DEPLOY-STATUS.md. Production v2.2.0 is live on
+https://weirongcheng9.atlassian.net (install
+54b88a44-10a6-4a16-a2ee-af7471050897, Up-to-date).
+
+1. **Rovo caveat:** Rovo is paid-only — a free site may not have it. The demo
+   site is Jira Free and has no Rovo entry, so the Rovo agent cannot be shown
+   there; it is included for sites that have Rovo.
+2. For the judges' installation link: deploy to production, then in the
    developer console → Distribution → Sharing → pick Jira → copy the link.
    (Do not pick "Sharing within organization", and do not submit the app for
-   Marketplace listing — either blocks the installation link.)
+   Marketplace listing — either blocks the installation link.) The link is
+   already generated — see DEPLOY-STATUS.md.
 
-## Demo script (video < 5 min)
+## Demo video (< 5 min)
 
-1. (0:00) Create `PAY-101` "Production checkout is down" — the trigger
-   fires: labels `triagegenie, category:incident, outage`, priority Highest,
-   assignee Ana (on call), first-response comment posted.
-2. (1:00) Open the issue panel: show the score breakdown (95/100), the
-   similar past issue `PAY-88`, and the fix plan.
-3. (2:00) Rovo chat: "Find similar past issues for MOB-55" → agent returns
-   `MOB-41` (fixed in 2.3.1); "Who should fix SEC-77?" → Priya (security).
-4. (3:00) Show the capacity rule: Marco Chen is at capacity, so the mobile
-   crash goes to Sara Kim instead.
-5. (3:45) MCP: the same tools listed in Rovo Studio; close with the install
-   link + repo.
+Shot list and recording notes: see DEMO-SCRIPT.md. The video shows the real
+app on the live site (fresh issue → auto-triage → panel → Apply); no mock
+UI, no Rovo (absent on the Jira Free demo site).
 
 ## Honest limitations
 
-- The Teamwork Graph queries and the `requestTeamworkGraph` call shape follow
-  a tutorial verified on a live site in Oct 2026, but this app has not run
-  against live data yet — the first deploy must confirm them against the
-  site's TWG schema (`https://<site>.atlassian.net/gateway/api/graphql/twg/schema`).
+- **Verified live on Jira Free (2026-11-16, v2.2.0):** auto-triage fires in
+  ~11s on a fresh issue, the panel renders, Apply is idempotent for the
+  first-response comment. The Teamwork Graph queries in `src/twg.ts` run on
+  the panel / Rovo path (asUser); in trigger mode (asApp) graph calls are
+  skipped, because Teamwork Graph is asUser-only — the triage then rests on
+  issue text + JQL similarity.
+- **Rovo is not demonstrable on the demo site:** Jira Free has no Rovo, so
+  the Rovo agent and MCP tools are included but untested live. Judges on a
+  site with Rovo can try them.
 - The Confluence "linked docs" context comes from Jira remote links, not a
   native TWG Confluence query (whose exact curated field names were not
   confirmed from the docs).
 - Assignee skills are inferred from recent assigned work, not from a skills
   directory — the panel always shows the reason so a human can overrule it.
-- `forge lint` / `forge deploy` / live Jira verification are all blocked on
-  the Atlassian developer account (see BUILD-LOG.md).
+- In trigger mode the assignee stays unassigned when no team member matches
+  (no Teamwork Graph there); the panel says a human must pick an owner.
+- The fix plan is generic/template text from the deterministic engine, not
+  generated per issue.
 
 ## License
 
