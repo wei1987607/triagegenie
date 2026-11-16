@@ -52,13 +52,68 @@
   `~/.config/PERMISSIONS_LINTER-nodejs` — fixed with the same
   `chown root:root` + `chmod g+s` as the CLI config dir.
 
-## ✅ DEPLOYED v2.1.0 + INSTALLED, Up-to-date (2026-11-16 ~17:00)
-- Fixes for the two live-verification bugs below deployed to production
-  (commit 5560fbf); `forge install list` confirms installation
+## ✅ DEPLOYED v2.2.0 + INSTALLED, Up-to-date (2026-11-16 ~17:10)
+- Fix for the duplicate-comment bug below deployed to production
+  (commit 0505565); `forge install list` confirms installation
   54b88a44-10a6-4a16-a2ee-af7471050897 is **Up-to-date** on
-  weirongcheng9.atlassian.net (version 2.1.0).
-- No new invocations in `forge logs` yet — nothing has run since the
-  redeploy. Re-verify in the browser (see below).
+  weirongcheng9.atlassian.net (production version 2.2.0).
+- Live verification of v2.2.0 still needed in the browser (see below).
+
+## ❌ LIVE RE-VERIFICATION v2.1.0 (2026-11-16 17:02, browser, CPG-8) + FIX
+- **Core flow WORKS**: auto-triage fired on new test issue CPG-8
+  ("测试2：提交订单时提示系统错误") — labels `category:task` +
+  `triagegenie` applied, bot first-response comment posted, panel
+  renders with no error, Apply shows the green "Triage applied"
+  confirmation. `forge logs` record: `{"triagegenie":"auto-triage",
+  "key":"CPG-8","category":"task","score":35,"assignee":null,
+  "applied":{"labels":true,"priority":true,"assignee":false,
+  "comment":true},"notes":[]}`.
+- **Bug — Apply posted the draft comment a second time**: the issue
+  ended up with two identical first-response comments (the auto-triage
+  bot one, plus one posted as the applying user kiki ki).
+  **Root cause (confirmed in code)**: `applyTriage` in src/index.ts
+  unconditionally POSTed the comment, and both the trigger
+  (`autoTriage`) and the panel resolver call the same function.
+  **Fix (commit 0505565)**: `applyTriage` now fetches the issue's
+  existing comments first (`GET /rest/api/3/issue/{key}/comment`) and
+  skips the post when the first response is already there — detected
+  by `isDuplicateFirstResponse` (src/triage.ts, pure + unit-tested):
+  exact normalised-text match, or the TriageGenie signature
+  `We've triaged <KEY> as` (the draft can shift slightly between the
+  trigger run and the panel run, e.g. the assignee line, so the
+  signature catches near-duplicates too). The skip is reported in the
+  panel's notes line ("first response already posted — skipped
+  duplicate comment"), which the frontend already renders. If the
+  comments cannot be read, it posts anyway (a duplicate is a wart, a
+  missing first response is worse). Labels/priority/assignee
+  behaviour unchanged. Local verification: typecheck clean, smoke
+  test **84 passed / 0 failed** (77 + 7 new dedup checks in section
+  [13]), manifest checks 56/56, `forge lint` clean.
+- **Priority write CONFIRMED (code + live log)**: `applyTriage`
+  writes priority in the same PUT as labels —
+  `{ fields: { labels, priority: { name: result.priorityLabel } } }`
+  with `priorityLabel` one of Jira's default names
+  (Highest/High/Medium/Low/Lowest) — and the CPG-8 log shows
+  `applied.priority: true`, i.e. the PUT returned OK. The browser not
+  showing a priority field in the issue details is a Jira UI/screen
+  matter (the CPG project's issue view does not display Priority),
+  not a failed write. No code change needed.
+- **NOT bugs (left as-is)**: (1) assignee stays unassigned on the
+  test issue — no team member matches in trigger mode (no Teamwork
+  Graph, team list empty); the panel correctly says a human must pick
+  an owner. (2) The fix plan is generic/template text from the
+  deterministic engine — do not try to make it issue-specific.
+
+## ⏳ LIVE RE-VERIFICATION — NEEDED (browser, after v2.2.0 deploy)
+1. Create a NEW test issue in the CPG project and wait ~1 min:
+   expect labels + priority set, assignee unassigned (expected — see
+   above), and ONE bot first-response comment from auto-triage.
+2. Open the issue → open the TriageGenie panel → click Apply →
+   **check there is exactly ONE first-response comment on the issue**
+   (no duplicate) and the panel shows the "already posted — skipped
+   duplicate comment" note.
+3. Rovo demo: still expected absent on Jira Free — confirm and move on.
+4. Delete the test issue(s) afterwards if wanted.
 
 ## ❌ LIVE VERIFICATION FAILURES (2026-11-16 16:54, browser) + FIXES
 1. **Panel render error** — the issue panel showed "Error rendering app -
@@ -102,39 +157,17 @@
 - `npm run verify` ✅ (77 tests + 56 manifest checks, 0 failed).
 - `forge lint` ✅ "No issues found."
 
-## ⏳ LIVE RE-VERIFICATION — NEEDED (browser, after v2.1.0 deploy)
-1. Create a NEW test issue in the CPG project (CPG-7 was created before
-   the fix, so its trigger already failed — a fresh issue is the real
-   test) and wait ~1 min: expect labels + priority set, assignee set if
-   a team member matches, and the draft first response posted as a
-   comment. Then check `forge logs -e production` for a
-   `triagegenie:auto-triage` success line (with category/score/applied).
-2. Open the issue → open the TriageGenie panel (••• menu) → check it
-   renders category / priority score / labels / assignee / draft
-   response / fix plan (no render error) → click Apply → check the
-   changes land on the issue.
-3. Rovo demo: still expected absent on Jira Free — confirm and move on.
-4. Delete the test issue(s) afterwards if wanted.
-
-## ⏳ LIVE VERIFICATION — NOT DONE YET (needs a browser)
-Nothing has invoked the app yet, so the following must be checked in Jira
-on weirongcheng9.atlassian.net (cloud browser as bnb69228@gmail.com):
-1. Create a test issue in the sample CPG project (e.g. a bug report) and
-   wait ~1 min: the auto-triage trigger (avi:jira:created:issue) should
-   apply labels + priority and post the draft first response as a comment.
-   This also exercises the 5 Teamwork Graph queries in src/twg.ts
-   (userTeams, teamMembers, assignedWork, workItemComments, workItemGoals).
-2. Open the issue → open the TriageGenie panel (••• menu) → check it
-   renders category / priority score / labels / assignee / draft response /
-   fix plan → click Apply → check the changes land on the issue.
-3. Rovo demo: open Rovo and try the TriageGenie agent ("Triage this
-   issue", "Who should fix this?", "Find similar past issues"). EXPECTED
-   CAVEAT: Rovo is paid-only and this is a Jira Free site, so the agent
-   may not appear at all — report exactly what is there; do not remove
-   features without approval.
-4. After the checks, run `forge logs -e production` to confirm invocations
-   succeeded (the resolver logs JSON lines with `triagegenie:` prefix).
-5. Delete the test issue(s) afterwards if wanted.
+## ⏳ Still to verify in the browser (beyond the v2.2.0 checklist above)
+- The 5 Teamwork Graph queries in src/twg.ts (userTeams, teamMembers,
+  assignedWork, workItemComments, workItemGoals) are only exercised on
+  the panel / Rovo path (asUser) — check `forge logs -e production`
+  for errors from a panel Apply, and confirm the panel's similar-issues
+  / assignee data looks live rather than empty.
+- Rovo demo: open Rovo and try the TriageGenie agent ("Triage this
+  issue", "Who should fix this?", "Find similar past issues"). EXPECTED
+  CAVEAT: Rovo is paid-only and this is a Jira Free site, so the agent
+  may not appear at all — report exactly what is there; do not remove
+  features without approval.
 
 ## Still needed for the Codegeist submission
 - Judges' install link: generate it in the developer console (logged in as
