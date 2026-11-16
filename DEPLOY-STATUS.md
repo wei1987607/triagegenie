@@ -52,6 +52,70 @@
   `~/.config/PERMISSIONS_LINTER-nodejs` — fixed with the same
   `chown root:root` + `chmod g+s` as the CLI config dir.
 
+## ✅ DEPLOYED v2.1.0 + INSTALLED, Up-to-date (2026-11-16 ~17:00)
+- Fixes for the two live-verification bugs below deployed to production
+  (commit 5560fbf); `forge install list` confirms installation
+  54b88a44-10a6-4a16-a2ee-af7471050897 is **Up-to-date** on
+  weirongcheng9.atlassian.net (version 2.1.0).
+- No new invocations in `forge logs` yet — nothing has run since the
+  redeploy. Re-verify in the browser (see below).
+
+## ❌ LIVE VERIFICATION FAILURES (2026-11-16 16:54, browser) + FIXES
+1. **Panel render error** — the issue panel showed "Error rendering app -
+   encountered unknown component strong." Root cause: src/frontend/index.tsx
+   used native HTML `<strong>` in 6 places; Forge UI Kit 2's reconciler
+   does not support native HTML elements. Fix (commit 5560fbf): all 6
+   replaced with the `@forge/react` `Strong` component (verified it is a
+   real export in the installed @forge/react 12.x:
+   `export declare const Strong: (props: MarkupProps) => ForgeElement`).
+   No other unsupported HTML elements in the frontend (grep checked
+   strong/em/b/i/u/a/br/span/div/p/h/ul/ol/li/img/code/pre/small/mark/sup/sub).
+2. **Auto-triage trigger never fired (apparently)** — test issue CPG-7
+   (created ~16:50) got no labels/assignee/comment after 4+ min.
+   **Diagnosis: the trigger DID fire.** `forge logs -e production` shows
+   one entry at 08:50:20 UTC (16:50:20 CST, exactly when CPG-7 was
+   created): `{"triagegenie":"auto-triage-error","key":"CPG-7","error":
+   "Forge platform failed to process runtime HTTP request - 401 -
+   AUTH_TYPE_UNAVAILABLE"}`. Root cause: the trigger ran `runTriage` →
+   `loadIssue` → `api.asUser().requestJira`, but a trigger invocation has
+   no user context, so asUser() has no auth type available (401).
+   The manifest trigger (avi:jira:created:issue) and the event payload
+   shape were correct — the event reached the function with the right key.
+   Fix (commit 5560fbf): the trigger path now uses `api.asApp()` for all
+   Jira REST calls (load / JQL similar / assignable-team / apply), via a
+   `jiraClient(asApp)` helper threaded through runTriage/loadIssue/
+   similarIssuesLive/graphContextLive/liveTeam/applyTriage. Panel and
+   Rovo actions keep asUser() (user context present there). Caveat:
+   Teamwork Graph is asUser-only in @forge/api 8.4.0 typings
+   (AsAppFetchMethods has no requestTeamworkGraph), so in app-auth mode
+   the graph calls are skipped with a note and the triage is based on
+   the issue text + JQL similarity; labels/priority/comment/assignee
+   still apply. If the asApp assignable-user search returns 403, the
+   team list degrades to empty (no assignee suggested) — watch for it
+   in the re-verification logs.
+3. **Rovo confirmed absent on Jira Free** (no Rovo entry anywhere) —
+   expected, paid-only. Nothing removed; report as-is.
+
+## Local verification of the fixes (commit 5560fbf)
+- `npm run typecheck` ✅ clean (it caught 2 missed call sites in the
+  Rovo actions — fixed before deploy).
+- `npm run verify` ✅ (77 tests + 56 manifest checks, 0 failed).
+- `forge lint` ✅ "No issues found."
+
+## ⏳ LIVE RE-VERIFICATION — NEEDED (browser, after v2.1.0 deploy)
+1. Create a NEW test issue in the CPG project (CPG-7 was created before
+   the fix, so its trigger already failed — a fresh issue is the real
+   test) and wait ~1 min: expect labels + priority set, assignee set if
+   a team member matches, and the draft first response posted as a
+   comment. Then check `forge logs -e production` for a
+   `triagegenie:auto-triage` success line (with category/score/applied).
+2. Open the issue → open the TriageGenie panel (••• menu) → check it
+   renders category / priority score / labels / assignee / draft
+   response / fix plan (no render error) → click Apply → check the
+   changes land on the issue.
+3. Rovo demo: still expected absent on Jira Free — confirm and move on.
+4. Delete the test issue(s) afterwards if wanted.
+
 ## ⏳ LIVE VERIFICATION — NOT DONE YET (needs a browser)
 Nothing has invoked the app yet, so the following must be checked in Jira
 on weirongcheng9.atlassian.net (cloud browser as bnb69228@gmail.com):
